@@ -83,7 +83,7 @@ jobs:
 
             echo "🐳 Deteniendo y reconstruyendo contenedores..."
             docker compose down
-            docker compose up --build -d --quiet
+            docker compose up --build -d
 
             echo "📦 Instalando dependencias PHP si no existen vendor..."
             if [ ! -d "../laravel/vendor" ]; then
