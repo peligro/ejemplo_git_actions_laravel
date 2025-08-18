@@ -10,12 +10,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production  # Puedes proteger este entorno en Settings
+    environment: production
     steps:
       - name: 🛑 Checkout del código
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Asegura que se traiga todo el historial
+          fetch-depth: 0
 
       - name: 🔐 Configurar SSH Key
         uses: webfactory/ssh-agent@v0.5.1
@@ -41,9 +41,9 @@ jobs:
 
           echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
 
-          # Ejecutar comandos remotos
-          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'EOF'
-            set -e  # Detener en caso de error
+          # ⚠️ IMPORTANTE: Usa EOF (sin comillas simples) para que las variables se expandan
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
+            set -e
 
             echo "📁 Navegando al directorio de despliegue..."
             cd "$DEPLOY_PATH" || { echo "❌ Error: No se encontró el directorio $DEPLOY_PATH"; exit 1; }
@@ -98,7 +98,7 @@ jobs:
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
 
             echo "✅ Despliegue completado con éxito"
-          EOF
+          EOF  # ← Nota: sin comillas
 
       - name: 📢 Notificación de éxito
         run: echo "🚀 Despliegue completado correctamente"
