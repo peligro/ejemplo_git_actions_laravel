@@ -1,8 +1,9 @@
 services:
   app:
     build:
-      context: ./docker/app
-    container_name: ${APP_CONTAINER_NAME:-peligro-laravel-app}  # Valor por defecto
+      context: .                    # ← Clave: ahora ve todo el proyecto
+      dockerfile: ./docker/app/Dockerfile
+    container_name: ${APP_CONTAINER_NAME:-peligro-laravel-app}
     working_dir: /var/www/html
     volumes:
       - ./laravel:/var/www/html

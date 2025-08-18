@@ -35,14 +35,14 @@ COPY supervisor/supervisor.conf /etc/supervisor/supervisord.conf
 # Establecer directorio de trabajo
 WORKDIR /var/www/html
 
-# Paso clave 1: Copiar solo los archivos de Composer
-COPY composer.json composer.lock ./
+# Paso clave 1: Copiar solo los archivos de Composer desde laravel/
+COPY laravel/composer.json laravel/composer.lock ./
 
 # Paso clave 2: Instalar dependencias
 RUN composer install --no-dev --optimize-autoloader --no-scripts --no-autoloader
 
-# Paso clave 3: Copiar el resto del código
-COPY . .
+# Paso clave 3: Copiar el resto del código desde laravel/
+COPY laravel/. .
 
 # Paso clave 4: Generar autoloader
 RUN composer dump-autoload --optimize
