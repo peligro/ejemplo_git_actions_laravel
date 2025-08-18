@@ -15,7 +15,7 @@ jobs:
       - name: 🛑 Checkout del código
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Asegura que se traiga todo el historial
+          fetch-depth: 0
 
       - name: 🔐 Configurar SSH Key
         uses: webfactory/ssh-agent@v0.5.1
@@ -42,31 +42,23 @@ jobs:
 
           echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
 
-          # ⚠️ Usa EOF sin comillas para que las variables se expandan
           ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
-            set -e  # Detener en caso de error
+            set -e
 
             # Paso 1: Ir al directorio de Laravel
-            echo "📁 Navegando al directorio de Laravel..."
             cd "$LARAVEL_DIR" || { echo "❌ Error: No se encontró el directorio $LARAVEL_DIR"; exit 1; }
 
             # Paso 2: Actualizar código
-            echo "⬇️  Actualizando código desde GitHub..."
             git fetch origin
             git reset --hard origin/main
             git clean -fd
 
             # Paso 3: Manejo del .env
-            echo "🔧 Asegurando que .env exista..."
             if [ ! -f .env ]; then
-              echo "📝 Creando .env desde .env.example"
               cp .env.example .env
-            else
-              echo "✅ .env ya existe, actualizando valores..."
             fi
 
-            # Paso 4: Reemplazar variables en .env
-            echo "✏️  Reemplazando variables en .env..."
+            # Paso 4: Reemplazar variables
             sed -i "s|DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
             sed -i "s|DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
             sed -i "s|DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
@@ -79,45 +71,36 @@ jobs:
             sed -i "s|APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
 
             # Paso 5: Permisos
-            echo "🧹 Asegurando permisos en storage/ y bootstrap/cache..."
             mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
             chmod -R 775 storage bootstrap/cache
             chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
             # Paso 6: Ir al directorio de Docker
-            echo "🐳 Cambiando al directorio de Docker..."
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # Paso 7: Limpiar contenedores antiguos (evita conflictos de nombre)
-            echo "🧹 Limpiando contenedores antiguos y huérfanos..."
-            docker compose down --remove-orphans || true
+            # Paso 7: Limpieza total (¡borra todo!)
+            echo "🧹 Limpieza total de Docker..."
+            docker compose down --volumes --remove-orphans || true
+            docker system prune -a --force --volumes
 
-            # Paso 8: Reconstruir y levantar contenedores
+            # Paso 8: Levantar contenedores
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
 
-            # Paso 9: Opcional: limpiar caché de build
-            docker builder prune --force || true
-
-            # Paso 10: Instalar dependencias si no existen
-            echo "📦 Instalando dependencias PHP si no existen vendor..."
+            # Paso 9: Instalar dependencias si no existen
             if [ ! -d "../laravel/vendor" ]; then
-              echo "🔧 vendor no existe, ejecutando composer install..."
               docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
             else
-              echo "✅ vendor ya existe, omitiendo composer install"
+              echo "✅ vendor ya existe"
             fi
 
-            # Paso 11: Migraciones
-            echo "🔄 Ejecutando migraciones..."
+            # Paso 10: Migraciones
             docker exec -u www-data "$CONTAINER_NAME" php artisan migrate --force
 
-            # Paso 12: Optimización
-            echo "🧹 Limpiando caché y optimizando..."
+            # Paso 11: Optimización
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize:clear
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
 
-            # ✅ Éxito
             echo "✅ Despliegue completado con éxito"
           EOF
 
