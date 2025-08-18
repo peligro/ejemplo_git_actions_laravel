@@ -42,7 +42,7 @@ jobs:
 
           echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
 
-          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'EOF'
             set -e
 
             # Paso 1: Ir al directorio de Laravel
@@ -78,26 +78,31 @@ jobs:
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # Paso 7: Limpieza total (¡borra todo!)
-            echo "🧹 Limpieza total de Docker..."
-            docker compose down --volumes --remove-orphans || true
-            docker system prune -a --force --volumes
+            # ✅ PASO CLAVE: Eliminar contenedores POR NOMBRE, sin depender de compose
+            echo "🧹 Forzando eliminación de contenedores antiguos..."
+            docker rm -f peligro-laravel-app || true
+            docker rm -f laravel-nginx || true
+            docker rm -f laravel-postgres || true
+            docker rm -f laravel-phppgadmin || true
 
-            # Paso 8: Levantar contenedores
+            # Paso 7: Levantar contenedores
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
 
-            # Paso 9: Instalar dependencias si no existen 
+            # Paso 8: Instalar dependencias si no existen
             if [ ! -d "../laravel/vendor" ]; then
+              echo "🔧 vendor no existe, ejecutando composer install..."
               docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
             else
               echo "✅ vendor ya existe"
             fi
 
-            # Paso 10: Migraciones
+            # Paso 9: Migraciones
+            echo "🔄 Ejecutando migraciones..."
             docker exec -u www-data "$CONTAINER_NAME" php artisan migrate --force
 
-            # Paso 11: Optimización
+            # Paso 10: Optimización
+            echo "🧹 Limpiando caché y optimizando..."
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize:clear
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
 
