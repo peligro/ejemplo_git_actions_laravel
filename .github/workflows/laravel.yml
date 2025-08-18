@@ -87,7 +87,7 @@ jobs:
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
 
-            # Paso 9: Instalar dependencias si no existen
+            # Paso 9: Instalar dependencias si no existen 
             if [ ! -d "../laravel/vendor" ]; then
               docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
             else
