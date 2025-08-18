@@ -2,7 +2,7 @@
 vendor/
 node_modules/
 
-# Ignorar archivos de desarrollo y configuración
+# Ignorar archivos de desarrollo
 .env
 .env.local
 .git
@@ -11,5 +11,7 @@ README.md
 Dockerfile
 .dockerignore
 *.log
+
+# Ignorar cachés
 storage/logs/*
 bootstrap/cache/*

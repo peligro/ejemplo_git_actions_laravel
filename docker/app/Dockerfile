@@ -26,28 +26,26 @@ RUN docker-php-ext-configure ldap --with-libdir=/lib/x86_64-linux-gnu && \
 # Instalar Composer
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# ✅ Copiar php.ini desde la ruta correcta
+# Copiar php.ini y supervisor.conf
 COPY docker/app/php.ini /usr/local/etc/php/
-
-# ✅ Copiar supervisor.conf desde la ruta correcta
 COPY docker/app/supervisor/supervisor.conf /etc/supervisor/supervisord.conf
 
-# Establecer directorio de trabajo
+# Directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar solo los archivos de Composer desde laravel/
+# Copiar composer.json y composer.lock
 COPY laravel/composer.json laravel/composer.lock ./
 
 # Instalar dependencias
 RUN composer install --no-dev --optimize-autoloader --no-scripts --no-autoloader
 
-# Copiar el resto del código desde laravel/
-COPY laravel/. .
+# Copiar TODO el código (pero .dockerignore evita sobrescribir vendor/)
+COPY laravel/. ./
 
-# Generar autoloader
+# Regenerar autoloader
 RUN composer dump-autoload --optimize
 
-# Asegurar permisos
+# Permisos
 RUN chown -R www-data:www-data /var/www/html
 RUN chmod -R 775 storage bootstrap/cache
 
