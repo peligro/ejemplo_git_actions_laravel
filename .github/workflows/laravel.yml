@@ -36,17 +36,17 @@ jobs:
           # Variables
           REMOTE_USER="${EC2_USER}"
           REMOTE_HOST="${EC2_HOST}"
-          DEPLOY_PATH="/home/ubuntu/proyecto"
+          LARAVEL_DIR="/home/ubuntu/proyecto/laravel"
+          DOCKER_DIR="/home/ubuntu/proyecto"
           CONTAINER_NAME="peligro-laravel-app"
 
           echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
 
-          # ⚠️ IMPORTANTE: Usa EOF (sin comillas simples) para que las variables se expandan
           ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
             set -e
 
-            echo "📁 Navegando al directorio de despliegue..."
-            cd "$DEPLOY_PATH" || { echo "❌ Error: No se encontró el directorio $DEPLOY_PATH"; exit 1; }
+            echo "📁 Navegando al directorio de Laravel..."
+            cd "$LARAVEL_DIR" || { echo "❌ Error: No se encontró el directorio $LARAVEL_DIR"; exit 1; }
 
             echo "⬇️  Actualizando código desde GitHub..."
             git fetch origin
@@ -78,12 +78,15 @@ jobs:
             chmod -R 775 storage bootstrap/cache
             chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
+            echo "🐳 Cambiando al directorio de Docker..."
+            cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
+
             echo "🐳 Deteniendo y reconstruyendo contenedores..."
             docker compose down
             docker compose up --build -d --quiet
 
             echo "📦 Instalando dependencias PHP si no existen vendor..."
-            if [ ! -d "vendor" ]; then
+            if [ ! -d "../laravel/vendor" ]; then
               echo "🔧 vendor no existe, ejecutando composer install..."
               docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
             else
@@ -98,7 +101,4 @@ jobs:
             docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
 
             echo "✅ Despliegue completado con éxito"
-          EOF  # ← Nota: sin comillas
-
-      - name: 📢 Notificación de éxito
-        run: echo "🚀 Despliegue completado correctamente"
+          EOF
