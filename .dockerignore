@@ -1,0 +1,15 @@
+# Ignorar directorios que no deben copiarse al contenedor
+vendor/
+node_modules/
+
+# Ignorar archivos de desarrollo y configuración
+.env
+.env.local
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+*.log
+storage/logs/*
+bootstrap/cache/*
