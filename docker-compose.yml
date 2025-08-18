@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: ./docker/app
-    container_name: peligro-laravel-app
+    container_name: ${APP_CONTAINER_NAME:-peligro-laravel-app}  # Valor por defecto
     working_dir: /var/www/html
     volumes:
       - ./laravel:/var/www/html
@@ -14,12 +14,10 @@ services:
       - "8000:8000"
     networks:
       - custom_network
-    
 
-  
   nginx:
     image: nginx:alpine
-    container_name: laravel-nginx
+    container_name: ${NGINX_CONTAINER_NAME:-laravel-nginx}
     volumes:
       - ./laravel:/var/www/html
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
@@ -29,37 +27,7 @@ services:
       - app
     networks:
       - custom_network
-  
-  postgres:
-    image: postgres:15
-    container_name: laravel-postgres
-    restart: always
-    environment:
-      POSTGRES_DB: laravel
-      POSTGRES_USER: laravel
-      POSTGRES_PASSWORD: secret
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks:
-      - custom_network
 
-  phppgadmin:
-    image: dpage/pgadmin4
-    container_name: laravel-phppgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    networks:
-      - custom_network
-volumes:
-  pgdata:
 
 networks:
   custom_network:
