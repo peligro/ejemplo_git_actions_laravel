@@ -1,36 +1,104 @@
-# This is a basic workflow to help you get started with Actions
+name: Deploy Laravel to EC2
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  deploy:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    environment: production  # Puedes proteger este entorno en Settings
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: 🛑 Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Asegura que se traiga todo el historial
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: 🔐 Configurar SSH Key
+        uses: webfactory/ssh-agent@v0.5.1
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: 🌐 Conectarse al servidor EC2 y desplegar
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          APP_KEY: ${{ secrets.APP_KEY }}
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          # Variables
+          REMOTE_USER="${EC2_USER}"
+          REMOTE_HOST="${EC2_HOST}"
+          DEPLOY_PATH="/home/ubuntu/proyecto"
+          CONTAINER_NAME="peligro-laravel-app"
+
+          echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
+
+          # Ejecutar comandos remotos
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'EOF'
+            set -e  # Detener en caso de error
+
+            echo "📁 Navegando al directorio de despliegue..."
+            cd "$DEPLOY_PATH" || { echo "❌ Error: No se encontró el directorio $DEPLOY_PATH"; exit 1; }
+
+            echo "⬇️  Actualizando código desde GitHub..."
+            git fetch origin
+            git reset --hard origin/main
+            git clean -fd
+
+            echo "🔧 Asegurando que .env exista..."
+            if [ ! -f .env ]; then
+              echo "📝 Creando .env desde .env.example"
+              cp .env.example .env
+            else
+              echo "✅ .env ya existe, actualizando valores..."
+            fi
+
+            echo "✏️  Reemplazando variables en .env..."
+            sed -i "s|DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+            sed -i "s|DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            sed -i "s|APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+            sed -i "s|APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
+
+            echo "🧹 Asegurando permisos en storage/ y bootstrap/cache..."
+            mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
+            chmod -R 775 storage bootstrap/cache
+            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+
+            echo "🐳 Deteniendo y reconstruyendo contenedores..."
+            docker compose down
+            docker compose up --build -d --quiet
+
+            echo "📦 Instalando dependencias PHP si no existen vendor..."
+            if [ ! -d "vendor" ]; then
+              echo "🔧 vendor no existe, ejecutando composer install..."
+              docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
+            else
+              echo "✅ vendor ya existe, omitiendo composer install"
+            fi
+
+            echo "🔄 Ejecutando migraciones..."
+            docker exec -u www-data "$CONTAINER_NAME" php artisan migrate --force
+
+            echo "🧹 Limpiando caché y optimizando..."
+            docker exec -u www-data "$CONTAINER_NAME" php artisan optimize:clear
+            docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
+
+            echo "✅ Despliegue completado con éxito"
+          EOF
+
+      - name: 📢 Notificación de éxito
+        run: echo "🚀 Despliegue completado correctamente"
