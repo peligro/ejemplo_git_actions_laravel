@@ -87,7 +87,10 @@ jobs:
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # Paso 7: Levantar contenedores (con build incluido)
+            # Paso 7: Limpiar contenedores antiguos y levantar nuevos
+            echo "🧹 Eliminando contenedores antiguos..."
+            docker compose down --remove-orphans --volumes || true
+
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
 
