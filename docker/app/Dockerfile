@@ -29,22 +29,22 @@ COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 # Copiar configuración personalizada de php.ini
 COPY php.ini /usr/local/etc/php/
 
-# Copiar configuración de Supervisor
-COPY supervisor/supervisor.conf /etc/supervisor/supervisord.conf
+# ✅ Copiar supervisor.conf desde la ruta correcta
+COPY docker/app/supervisor/supervisor.conf /etc/supervisor/supervisord.conf
 
 # Establecer directorio de trabajo
 WORKDIR /var/www/html
 
-# Paso clave 1: Copiar solo los archivos de Composer desde laravel/
+# Copiar solo los archivos de Composer desde laravel/
 COPY laravel/composer.json laravel/composer.lock ./
 
-# Paso clave 2: Instalar dependencias
+# Instalar dependencias
 RUN composer install --no-dev --optimize-autoloader --no-scripts --no-autoloader
 
-# Paso clave 3: Copiar el resto del código desde laravel/
+# Copiar el resto del código desde laravel/
 COPY laravel/. .
 
-# Paso clave 4: Generar autoloader
+# Generar autoloader
 RUN composer dump-autoload --optimize
 
 # Asegurar permisos
