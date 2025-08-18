@@ -38,11 +38,14 @@ jobs:
           REMOTE_HOST="${EC2_HOST}"
           LARAVEL_DIR="/home/ubuntu/proyecto/laravel"
           DOCKER_DIR="/home/ubuntu/proyecto"
-          CONTAINER_NAME="peligro-laravel-app"
+          CONTAINER_NAME="peligro-laravel-app"  # Para comandos docker exec
+
+          # Generar un SHORT_COMMIT (últimos 7 dígitos del commit)
+          SHORT_COMMIT=$(git rev-parse --short=7 HEAD)
 
           echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
 
-          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
             set -e
 
             # Paso 1: Ir al directorio de Laravel
@@ -52,6 +55,16 @@ jobs:
             git fetch origin
             git reset --hard origin/main
             git clean -fd
+
+            # Extraer SHORT_COMMIT del último commit (últimos 7 caracteres)
+            SHORT_COMMIT=\$(git rev-parse --short=7 HEAD)
+            echo "🔖 Commit: \$SHORT_COMMIT"
+
+            # Definir nombres únicos
+            export APP_CONTAINER_NAME="peligro-laravel-app-\$SHORT_COMMIT"
+            export NGINX_CONTAINER_NAME="laravel-nginx-\$SHORT_COMMIT"
+            export POSTGRES_CONTAINER_NAME="laravel-postgres-\$SHORT_COMMIT"
+            export PGADMIN_CONTAINER_NAME="laravel-phppgadmin-\$SHORT_COMMIT"
 
             # Paso 3: Manejo del .env
             if [ ! -f .env ]; then
@@ -78,33 +91,26 @@ jobs:
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # ✅ PASO CLAVE: Eliminar contenedores POR NOMBRE, sin depender de compose
-            echo "🧹 Forzando eliminación de contenedores antiguos..."
-            docker rm -f peligro-laravel-app || true
-            docker rm -f laravel-nginx || true
-            docker rm -f laravel-postgres || true
-            docker rm -f laravel-phppgadmin || true
-
-            # Paso 7: Levantar contenedores
-            echo "🚀 Construyendo y levantando contenedores..."
+            # Paso 7: Levantar contenedores con nombres únicos
+            echo "🚀 Construyendo y levantando contenedores con nombres únicos..."
             docker compose up --build -d
 
-            # Paso 8: Instalar dependencias si no existen
+            # Paso 8: Instalar dependencias
             if [ ! -d "../laravel/vendor" ]; then
               echo "🔧 vendor no existe, ejecutando composer install..."
-              docker exec -u www-data "$CONTAINER_NAME" composer install --optimize-autoloader --no-dev
+              docker exec -u www-data "\$APP_CONTAINER_NAME" composer install --optimize-autoloader --no-dev
             else
               echo "✅ vendor ya existe"
             fi
 
             # Paso 9: Migraciones
             echo "🔄 Ejecutando migraciones..."
-            docker exec -u www-data "$CONTAINER_NAME" php artisan migrate --force
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan migrate --force
 
             # Paso 10: Optimización
             echo "🧹 Limpiando caché y optimizando..."
-            docker exec -u www-data "$CONTAINER_NAME" php artisan optimize:clear
-            docker exec -u www-data "$CONTAINER_NAME" php artisan optimize
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize:clear
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize
 
             echo "✅ Despliegue completado con éxito"
           EOF
