@@ -26,8 +26,8 @@ RUN docker-php-ext-configure ldap --with-libdir=/lib/x86_64-linux-gnu && \
 # Instalar Composer
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# Copiar configuración personalizada de php.ini
-COPY php.ini /usr/local/etc/php/
+# ✅ Copiar php.ini desde la ruta correcta
+COPY docker/app/php.ini /usr/local/etc/php/
 
 # ✅ Copiar supervisor.conf desde la ruta correcta
 COPY docker/app/supervisor/supervisor.conf /etc/supervisor/supervisord.conf
