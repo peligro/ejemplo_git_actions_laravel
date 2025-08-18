@@ -89,7 +89,8 @@ jobs:
 
             # Paso 7: Limpiar contenedores antiguos y levantar nuevos
             echo "🧹 Eliminando contenedores antiguos..."
-            docker compose down --remove-orphans --volumes || true
+            docker compose down || true
+            docker system prune -a --force --volumes
 
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
