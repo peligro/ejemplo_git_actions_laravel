@@ -36,7 +36,7 @@ jobs:
           # Variables
           REMOTE_USER="${EC2_USER}"
           REMOTE_HOST="${EC2_HOST}"
-          LARAVEL_DIR="/home/ubuntu/proyecto/laravel"
+          LARAVEL_DIR="/home/ubuntu/proyecto"
           DOCKER_DIR="/home/ubuntu/proyecto"
 
           # Generar SHORT_COMMIT
@@ -59,8 +59,6 @@ jobs:
             SHORT_COMMIT=\$(git rev-parse --short=7 HEAD)
             export APP_CONTAINER_NAME="peligro-laravel-app-\$SHORT_COMMIT"
             export NGINX_CONTAINER_NAME="laravel-nginx-\$SHORT_COMMIT"
-            export POSTGRES_CONTAINER_NAME="laravel-postgres-\$SHORT_COMMIT"
-            export PGADMIN_CONTAINER_NAME="laravel-phppgadmin-\$SHORT_COMMIT"
 
             # Paso 3: Manejo del .env
             if [ ! -f .env ]; then
@@ -87,19 +85,20 @@ jobs:
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # Paso 7: Limpiar contenedores antiguos y levantar nuevos
+            # Paso 7: Limpiar contenedores antiguos
             echo "🧹 Eliminando contenedores antiguos..."
             docker compose down || true
             docker system prune -a --force --volumes
 
+            # Paso 8: Levantar contenedores
             echo "🚀 Construyendo y levantando contenedores..."
             docker compose up --build -d
 
-            # Paso 8: Migraciones
+            # Paso 9: Migraciones
             echo "🔄 Ejecutando migraciones..."
             docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan migrate --force
 
-            # Paso 9: Optimización
+            # Paso 10: Optimización
             echo "🧹 Limpiando caché y optimizando..."
             docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize:clear
             docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize
