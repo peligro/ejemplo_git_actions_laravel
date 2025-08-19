@@ -1,17 +1,7 @@
-# Ignorar directorios que no deben copiarse al contenedor
 vendor/
 node_modules/
-
-# Ignorar archivos de desarrollo
 .env
-.env.local
 .git
-.gitignore
-README.md
-Dockerfile
-.dockerignore
 *.log
-
-# Ignorar cachés
 storage/logs/*
 bootstrap/cache/*
