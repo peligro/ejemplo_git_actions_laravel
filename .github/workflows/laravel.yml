@@ -55,17 +55,17 @@ jobs:
             git reset --hard origin/main
             git clean -fd
 
-            # Generar SHORT_COMMIT
+            # Generar SHORT_COMMIT y nombres únicos
             SHORT_COMMIT=\$(git rev-parse --short=7 HEAD)
             export APP_CONTAINER_NAME="peligro-laravel-app-\$SHORT_COMMIT"
             export NGINX_CONTAINER_NAME="laravel-nginx-\$SHORT_COMMIT"
 
-             # Paso 3: Manejo del .env
+            # Paso 3: Manejo del .env
             if [ ! -f .env ]; then
               cp .env.example .env
             fi
 
-            # Paso 4: Asegurar que las variables de DB estén descomentadas y con valores correctos
+            # Paso 4: Asegurar que las variables estén descomentadas y con valores correctos
             sed -i "s|^#\\s*DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
             sed -i "s|^#\\s*DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
             sed -i "s|^#\\s*DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
@@ -91,32 +91,37 @@ jobs:
 
             # Paso 5: Permisos
             mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
-            chmod -R 775 storage bootstrap/cache
-            chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+            sudo chown -R 1000:1000 storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
 
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-
-            # Paso 7: Forzar eliminación del contenedor
-            echo "🧹 Forzando eliminación del contenedor peligro-laravel-app..."
-            docker rm -f peligro-laravel-app || true
-
-            echo "🧹 Limpieza adicional..."
+            # Paso 7: Eliminar contenedor anterior (por nombre único)
+            echo "🧹 Eliminando contenedor antiguo (si existe)..."
+            docker rm -f "\$APP_CONTAINER_NAME" || true
             docker system prune -a --force --volumes || true
 
-            # Paso 8: Levantar contenedores
+            # Paso 8: Levantar contenedores con variables
             echo "🚀 Construyendo y levantando contenedores..."
+            APP_CONTAINER_NAME="\$APP_CONTAINER_NAME" \
+            NGINX_CONTAINER_NAME="\$NGINX_CONTAINER_NAME" \
+            APP_KEY="${APP_KEY}" \
+            DB_HOST="${DB_HOST}" \
+            DB_PORT="${DB_PORT}" \
+            DB_DATABASE="${DB_DATABASE}" \
+            DB_USERNAME="${DB_USERNAME}" \
+            DB_PASSWORD="${DB_PASSWORD}" \
             docker compose up --build -d
 
             # Paso 9: Migraciones
             echo "🔄 Ejecutando migraciones..."
-            docker exec -u www-data peligro-laravel-app php artisan migrate --force
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan migrate --force
 
             # Paso 10: Optimización
             echo "🧹 Limpiando caché y optimizando..."
-            docker exec -u www-data peligro-laravel-app php artisan optimize:clear
-            docker exec -u www-data peligro-laravel-app php artisan optimize
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize:clear
+            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize
 
             echo "✅ Despliegue completado con éxito"
           EOF
