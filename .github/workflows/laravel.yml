@@ -60,22 +60,34 @@ jobs:
             export APP_CONTAINER_NAME="peligro-laravel-app-\$SHORT_COMMIT"
             export NGINX_CONTAINER_NAME="laravel-nginx-\$SHORT_COMMIT"
 
-            # Paso 3: Manejo del .env
+             # Paso 3: Manejo del .env
             if [ ! -f .env ]; then
               cp .env.example .env
             fi
 
-            # Paso 4: Reemplazar variables
-            sed -i "s|DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
-            sed -i "s|DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
-            sed -i "s|APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-            sed -i "s|APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
+            # Paso 4: Asegurar que las variables de DB estén descomentadas y con valores correctos
+            sed -i "s|^#\\s*DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+            sed -i "s|^#\\s*DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|^#\\s*DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|^#\\s*DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|^#\\s*DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|^#\\s*DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+
+            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+            sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+
+            sed -i "s|^#\\s*APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+            sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+            sed -i "s|^#\\s*APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|^#\\s*APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|^#\\s*APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
+            sed -i "s|^APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
 
             # Paso 5: Permisos
             mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
