@@ -93,9 +93,11 @@ jobs:
             sed -i "s|^#\\s*APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
             sed -i "s|^APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
 
-            # Paso 5: Permisos
+            # Paso 5: Permisos (en el host)
             mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
-            sudo chown -R 1000:1000 storage bootstrap/cache
+
+            echo "🔧 Ajustando permisos para www-data (UID 33)..."
+            sudo chown -R 33:33 storage bootstrap/cache
             sudo chmod -R 775 storage bootstrap/cache
 
             # Paso 6: Ir al directorio de Docker
