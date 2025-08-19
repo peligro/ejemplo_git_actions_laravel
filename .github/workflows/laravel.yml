@@ -50,7 +50,11 @@ jobs:
             # Paso 1: Ir al directorio de Laravel
             cd "$LARAVEL_DIR" || { echo "❌ Error: No se encontró el directorio $LARAVEL_DIR"; exit 1; }
 
-            # Paso 2: Actualizar código
+            # Paso 2: Eliminar lock y actualizar código
+            echo "🔓 Eliminando .git/index.lock si existe..."
+            rm -f .git/index.lock
+
+            echo "⬇️  Actualizando código desde GitHub..."
             git fetch origin
             git reset --hard origin/main
             git clean -fd
