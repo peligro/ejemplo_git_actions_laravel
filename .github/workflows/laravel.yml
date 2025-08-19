@@ -96,9 +96,12 @@ jobs:
             # Paso 5: Permisos (en el host)
             mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
 
-            echo "🔧 Ajustando permisos para www-data (UID 33)..."
-            sudo chown -R 33:33 storage bootstrap/cache
+            echo "🔧 Ajustando permisos para storage y bootstrap/cache..."
+            sudo chown -R www-data:www-data storage bootstrap/cache
             sudo chmod -R 775 storage bootstrap/cache
+
+            # Asegurar que bootstrap/ también sea accesible
+            sudo chown -R www-data:www-data bootstrap
 
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
