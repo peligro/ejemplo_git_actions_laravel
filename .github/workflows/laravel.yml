@@ -85,10 +85,13 @@ jobs:
             # Paso 6: Ir al directorio de Docker
             cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
 
-            # Paso 7: Limpiar contenedores antiguos
-            echo "🧹 Eliminando contenedores antiguos..."
-            docker compose down || true
-            docker system prune -a --force --volumes
+
+            # Paso 7: Forzar eliminación del contenedor
+            echo "🧹 Forzando eliminación del contenedor peligro-laravel-app..."
+            docker rm -f peligro-laravel-app || true
+
+            echo "🧹 Limpieza adicional..."
+            docker system prune -a --force --volumes || true
 
             # Paso 8: Levantar contenedores
             echo "🚀 Construyendo y levantando contenedores..."
@@ -96,12 +99,12 @@ jobs:
 
             # Paso 9: Migraciones
             echo "🔄 Ejecutando migraciones..."
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan migrate --force
+            docker exec -u www-data peligro-laravel-app php artisan migrate --force
 
             # Paso 10: Optimización
             echo "🧹 Limpiando caché y optimizando..."
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize:clear
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize
+            docker exec -u www-data peligro-laravel-app php artisan optimize:clear
+            docker exec -u www-data peligro-laravel-app php artisan optimize
 
             echo "✅ Despliegue completado con éxito"
           EOF
