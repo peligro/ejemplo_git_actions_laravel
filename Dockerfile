@@ -32,15 +32,21 @@ COPY supervisor/supervisor.conf /etc/supervisor/supervisord.conf
 # Establecer directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar código y entrypoint
+# Copiar composer.json y composer.lock primero (para cachear dependencias)
+COPY composer.json composer.lock ./
+
+# Instalar dependencias PHP
+RUN composer install --no-dev --optimize-autoloader --no-scripts --no-progress
+
+# Copiar el resto del código
 COPY --chown=www-data:www-data . .
+
+# Copiar y hacer ejecutable entrypoint.sh
 COPY --chown=www-data:www-data entrypoint.sh /var/www/html/entrypoint.sh
+RUN chmod +x /var/www/html/entrypoint.sh
 
 # Cambiar a usuario www-data
 USER www-data
-
-# Hacer entrypoint.sh ejecutable
-RUN chmod +x /var/www/html/entrypoint.sh
 
 # Entrypoint
 ENTRYPOINT ["./entrypoint.sh"]
