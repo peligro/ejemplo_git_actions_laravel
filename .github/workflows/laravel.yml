@@ -24,7 +24,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to EC2
+      - name: Despliegue en EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -33,16 +33,16 @@ jobs:
           script: |
             cd /home/ubuntu/proyecto
             
-            # Pull latest code
+            # hacemos pull a la rama main
             echo "Pulling latest code from main branch..."
             git fetch origin main
             git reset --hard origin/main
             
-            # Create fresh .env from example but remove variables we'll replace
-            echo "Creating optimized .env file..."
+            # Cree un .env nuevo a partir del ejemplo pero elimine las variables que reemplazaremos
+            echo "creando archivo .env..."
             cp .env.example .env.template
             
-            # Remove variables that will be replaced
+            # Eliminar variables que serán reemplazadas
             grep -v "^APP_KEY=" .env.template | \
             grep -v "^APP_DEBUG=" | \
             grep -v "^APP_ENV=" | \
@@ -54,7 +54,7 @@ jobs:
             grep -v "^DB_USERNAME=" | \
             grep -v "^DB_PASSWORD=" > .env.clean
             
-            # Add the correct variables
+            # Añade las variables correctas
             {
               cat .env.clean
               echo "APP_KEY=${{ secrets.APP_KEY }}"
@@ -69,54 +69,54 @@ jobs:
               echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}"
             } | awk '!seen[$0]++' | grep -v "^$" | grep -v "^#" > .env
             
-            # Clean up temporary files
+            # Limpiar archivos temporales
             rm -f .env.template .env.clean
             
-            # Show the final .env content for debugging
+            # Mostrar el contenido final del .env para depuración
             echo "Final .env content (relevant variables):"
             grep -E "^(APP_|DB_)" .env
             echo "---"
             echo "Total lines in .env:"
             wc -l .env
             
-            # Set proper permissions
-            echo "Setting file permissions..."
+            # Establecer permisos adecuados
+            echo "Configuración de permisos de archivos..."
             chmod -R 755 storage bootstrap/cache
             
-            # Stop and clean containers
-            echo "Stopping and cleaning Docker containers..."
+            # Detener y limpiar los contenedores
+            echo "Detener y limpiar contenedores Docker..."
             docker compose down || true
             docker system prune --all --force || true
             docker volume prune --force || true
             
-            # Build and start containers
-            echo "Building and starting containers..."
+            # Construir e iniciar contenedores
+            echo "Construcción y puesta en marcha de contenedores..."
             docker compose up --build -d
             
-            # Wait for containers to be ready
-            echo "Waiting for containers to be ready..."
+            # Espere a que los contenedores estén listos
+            echo "Espere a que los contenedores estén listos..."
             sleep 45
             
-            # Set permissions inside container
-            echo "Setting permissions inside container..."
+            # Establecer permisos dentro del contenedor
+            echo "Establecer permisos dentro del contenedor..."
             docker exec peligro-laravel-app chown -R www-data:www-data storage bootstrap/cache || true
             docker exec peligro-laravel-app chmod -R 775 storage bootstrap/cache || true
             
-            # Run composer install inside the app container
-            echo "Installing Composer dependencies..."
+            # Ejecute composer install dentro del contenedor de la aplicación
+            echo "Instalación de dependencias de Composer..."
             docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader --no-interaction --no-progress
             
-            # Clear cache first
-            echo "Clearing cache..."
+            # Primero, borre el caché
+            echo "Borrando cache..."
             docker exec peligro-laravel-app php artisan config:clear
             docker exec peligro-laravel-app php artisan cache:clear
             docker exec peligro-laravel-app php artisan view:clear
             
-            # Run migrations
-            echo "Running migrations..."
+            # Ejecutar migraciones
+            echo "Ejecutando migrations..."
             docker exec peligro-laravel-app php artisan migrate --force
             
-            # Optimize application
+            # Optimizando aplicación
             echo "Optimizing application..."
             docker exec peligro-laravel-app php artisan config:cache
             docker exec peligro-laravel-app php artisan route:cache
@@ -125,4 +125,4 @@ jobs:
             
             
             
-            echo "Deployment completed successfully!"
+            echo "¡Implementación completada exitosamente!"
