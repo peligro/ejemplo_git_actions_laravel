@@ -34,44 +34,54 @@ jobs:
 
           # Conectarse al servidor EC2 usando SSH
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key $EC2_USER@$EC2_HOST << 'EOF'
+            set -e  # Salir si hay errores
+
             cd /home/ubuntu/proyecto
 
             # Descargar el código más reciente
             git fetch origin
             git reset --hard origin/main
 
-            # === Solo crear o actualizar .env si no existe ===
+            # === Asegurarse de que .env exista ===
             if [ ! -f ".env" ]; then
-              echo "Creando .env..."
+              echo "📁 Creando .env desde .env.example"
               cp .env.example .env
             fi
 
-            # === Reemplazar solo las variables que necesitamos ===
-            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
-            sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
-            sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+            # === Descomentar y establecer variables DB (aunque estén comentadas) ===
+            sed -i "s|^#* *DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION}|" .env
+            sed -i "s|^#* *DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|^#* *DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|^#* *DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|^#* *DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|^#* *DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
 
-            # Si no hay APP_KEY, agregarlo
-            if ! grep -q "^APP_KEY=" .env; then
+            # === Forzar APP_KEY (incluso si está vacío o comentado) ===
+            if grep -q "^APP_KEY=" .env; then
+              sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
+            else
               echo "APP_KEY=${APP_KEY}" >> .env
             fi
 
+            # === Asegurarse de que APP_ENV y APP_DEBUG estén correctos ===
+            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+
+            echo "✅ .env actualizado con credenciales"
+
             # === Limpiar y reiniciar contenedores ===
-            docker-compose down
+            echo "🧹 Limpiando contenedores y volúmenes..."
+            docker-compose down --remove-orphans || true
             docker system prune --all --force
             docker volume prune --all --force
 
-            # Construir e iniciar servicios
+            # === Construir e iniciar servicios ===
+            echo "🚀 Construyendo e iniciando contenedores..."
             docker-compose up --build -d
 
-            # Ejecutar migraciones
+            # === Ejecutar migraciones ===
+            echo "🔄 Ejecutando migraciones..."
             docker-compose exec -T app php artisan migrate --force
 
-            echo "✅ Despliegue completado"
+            echo "✅ Despliegue completado exitosamente"
           EOF
