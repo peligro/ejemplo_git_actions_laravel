@@ -19,30 +19,28 @@ jobs:
             cd /home/ubuntu/proyecto
             git pull origin main
 
-            # Verificar si .env existe, si no lo crea con variables
+            # Copiar .env si no existe
             if [ ! -f .env ]; then
               cp .env.example .env
             fi
 
-            # Reemplazar variables en .env usando sed
+            # Reemplazar variables
             sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
             sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|" .env
             sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
             sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
             sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|" .env
             sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|" .env
-
-            # Actualizar APP_ENV y APP_DEBUG
             sed -i "s|APP_ENV=.*|APP_ENV=production|" .env
             sed -i "s|APP_DEBUG=.*|APP_DEBUG=false|" .env
 
-            # Asegurar permisos
-            chmod -R 775 storage bootstrap/cache
+            # 🔥 CORREGIR PERMISOS EN EL HOST ANTES DE LEVANTAR DOCKER
+            sudo chown -R ubuntu:www-data storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
 
-            # Construir e iniciar servicios con docker-compose
+            # Levantar contenedores
             docker-compose down --remove-orphans
             docker-compose up -d --build
 
-            # Ejecutar migraciones solo si no se han hecho (o forzarlas)
-            # Accedemos al contendor app para ejecutar artisan
+            # Ejecutar migraciones
             docker exec peligro-laravel-app php artisan migrate --force
