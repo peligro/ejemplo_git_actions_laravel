@@ -23,30 +23,21 @@ RUN docker-php-ext-configure ldap --with-libdir=/lib/x86_64-linux-gnu && \
 # Instalar Composer
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# Copiar configuración personalizada de php.ini
+# Copiar php.ini
 COPY php.ini /usr/local/etc/php/
 
-# Copiar configuración de Supervisor
+# Copiar supervisor
 COPY supervisor/supervisor.conf /etc/supervisor/supervisord.conf
 
-# Establecer directorio de trabajo
+# Directorio de trabajo
 WORKDIR /var/www/html
 
-# Copiar composer.json y composer.lock primero (para cachear dependencias)
-COPY composer.json composer.lock ./
+# Copiar código (sin entrypoint.sh)
+COPY . .
 
-# Instalar dependencias PHP
-RUN composer install --no-dev --optimize-autoloader --no-scripts --no-progress
+# Permisos
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 775 storage bootstrap/cache
 
-# Copiar el resto del código
-COPY --chown=www-data:www-data . .
-
-# Copiar y hacer ejecutable entrypoint.sh
-COPY --chown=www-data:www-data entrypoint.sh /var/www/html/entrypoint.sh
-RUN chmod +x /var/www/html/entrypoint.sh
-
-# Cambiar a usuario www-data
-USER www-data
-
-# Entrypoint
-ENTRYPOINT ["./entrypoint.sh"]
+# No hay ENTRYPOINT ni CMD extra
+# Usa el comando por defecto de php:8.4-fpm
