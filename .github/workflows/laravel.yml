@@ -27,61 +27,61 @@ jobs:
 
       - name: Deploy to EC2 via SSH
         run: |
-          # Crear directorio temporal para la clave SSH
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
 
-          # Conectarse al servidor EC2 usando SSH
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key $EC2_USER@$EC2_HOST << 'EOF'
-            set -e  # Salir si hay errores
-
+            set -e
             cd /home/ubuntu/proyecto
 
-            # Descargar el código más reciente
+            # === 1. Actualizar código ===
             git fetch origin
             git reset --hard origin/main
 
-            # === Asegurarse de que .env exista ===
-            if [ ! -f ".env" ]; then
-              echo "📁 Creando .env desde .env.example"
-              cp .env.example .env
+            # === 2. Asegurar .env.example exista ===
+            if [ ! -f ".env.example" ]; then
+              cp .env .env.example
             fi
 
-            # === Descomentar y establecer variables DB (aunque estén comentadas) ===
-            sed -i "s|^#* *DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION}|" .env
-            sed -i "s|^#* *DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|^#* *DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|^#* *DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|^#* *DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^#* *DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            # === 3. Crear .env desde .env.example ===
+            cp .env.example .env
 
-            # === Forzar APP_KEY (incluso si está vacío o comentado) ===
-            if grep -q "^APP_KEY=" .env; then
-              sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-            else
-              echo "APP_KEY=${APP_KEY}" >> .env
-            fi
+            # === 4. Reemplazar variables (descomentando si es necesario) ===
+            sed -i "s|^#*APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|^#*APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|^#*DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION}|" .env
+            sed -i "s|^#*DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
+            sed -i "s|^#*DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
+            sed -i "s|^#*DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
+            sed -i "s|^#*DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
+            sed -i "s|^#*DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            sed -i "s|^#*APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
 
-            # === Asegurarse de que APP_ENV y APP_DEBUG estén correctos ===
-            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-
-            echo "✅ .env actualizado con credenciales"
-
-            # === Limpiar y reiniciar contenedores ===
-            echo "🧹 Limpiando contenedores y volúmenes..."
+            # === 5. Limpiar ===
             docker-compose down --remove-orphans || true
-            docker system prune --all --force
-            docker volume prune --all --force
+            docker system prune -a --force --volumes
 
-            # === Construir e iniciar servicios ===
-            echo "🚀 Construyendo e iniciando contenedores..."
-            docker-compose up --build -d 
+            # === 6. Levantar contenedores (sin migrate todavía) ===
+            docker-compose up --build -d
 
-            # === Ejecutar migraciones ===
+            # === 7. Esperar a que app esté listo ===
+            echo "⏳ Esperando a que el contenedor app esté listo..."
+            until [ "$(docker inspect -f '{{.State.Running}}' peligro-laravel-app 2>/dev/null)" = "true" ]; do
+              sleep 2
+            done
+
+            # === 8. Ejecutar comandos necesarios ===
+            echo "🔑 Generando APP_KEY..."
+            docker-compose exec -T app php artisan key:generate --force
+
             echo "🔄 Ejecutando migraciones..."
             docker-compose exec -T app php artisan migrate --force
 
-            echo "✅ Despliegue completado exitosamente"
+            echo "🧹 Limpiando cache..."
+            docker-compose exec -T app php artisan config:cache
+            docker-compose exec -T app php artisan route:cache
+            docker-compose exec -T app php artisan view:cache
+
+            echo "✅ Despliegue completado"
           EOF
