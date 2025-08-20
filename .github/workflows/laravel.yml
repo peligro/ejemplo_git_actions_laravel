@@ -1,96 +1,109 @@
-name: Deploy to EC2
+name: Laravel CI/CD
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      DB_CONNECTION: pgsql
+      APP_KEY: ${{ secrets.APP_KEY }}
       DB_HOST: ${{ secrets.DB_HOST }}
       DB_PORT: ${{ secrets.DB_PORT }}
       DB_DATABASE: ${{ secrets.DB_DATABASE }}
       DB_USERNAME: ${{ secrets.DB_USERNAME }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      APP_KEY: ${{ secrets.APP_KEY }}
-      EC2_USER: ${{ secrets.EC2_USER }}
       EC2_HOST: ${{ secrets.EC2_HOST }}
-      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_USER: ${{ secrets.EC2_USER }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Deploy to EC2 via SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key $EC2_USER@$EC2_HOST << 'EOF'
-            set -e
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
             cd /home/ubuntu/proyecto
-
-            # === 1. Actualizar código ===
-            git fetch origin
+            
+            # Pull latest code
+            git fetch origin main
             git reset --hard origin/main
-
-            # === 2. Asegurar .env.example exista ===
-            if [ ! -f ".env.example" ]; then
-              cp .env .env.example
+            
+            # Check if .env exists, if not create from example
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              
+              # Replace environment variables
+              sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|g" .env
+              sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|g" .env
+              sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|g" .env
+              sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
+              sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
+              sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|g" .env
+            else
+              # Update existing .env if needed
+              sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|g" .env
+              sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|g" .env
+              sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|g" .env
+              sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
+              sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
+              sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|g" .env
             fi
-
-            # === 3. Crear .env desde .env.example ===
-            cp .env.example .env
-
-            # === 4. Reemplazar variables (descomentando si es necesario) ===
-            sed -i "s|^#*APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|^#*APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^#*DB_CONNECTION=.*|DB_CONNECTION=${DB_CONNECTION}|" .env
-            sed -i "s|^#*DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|^#*DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|^#*DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|^#*DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^#*DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
-            sed -i "s|^#*APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-
-            # === 4.5 Verificar que .env se haya creado correctamente ===
-            if [ ! -f ".env" ]; then
-              echo "❌ FATAL: El archivo .env no existe después de crearlo"
-              exit 1
-            fi
-            echo "✅ .env creado exitosamente en: $(pwd)/.env"
-            echo "📄 Variables clave en .env:"
-            grep -E "APP_ENV|APP_KEY|DB_HOST|DB_DATABASE" .env
-
-            # === 5. Limpiar ===
-            docker-compose down --remove-orphans || true
-            docker system prune -a --force --volumes
-
-            # === 6. Levantar contenedores (sin migrate todavía) ===
-            docker-compose up --build -d
-
-            # === 7. Esperar a que app esté listo ===
-            echo "⏳ Esperando a que el contenedor app esté listo..."
-            until [ "$(docker inspect -f '{{.State.Running}}' peligro-laravel-app 2>/dev/null)" = "true" ]; do
-              sleep 2
-            done
-
-            # === 8. Ejecutar comandos necesarios ===
-            echo "🔑 Generando APP_KEY..."
-            docker-compose exec -T app php artisan key:generate --force
-
-            echo "🔄 Ejecutando migraciones..."
-            docker-compose exec -T app php artisan migrate --force
-
-            echo "🧹 Limpiando cache..."
-            docker-compose exec -T app php artisan config:cache
-            docker-compose exec -T app php artisan route:cache
-            docker-compose exec -T app php artisan view:cache
-
-            echo "✅ Despliegue completado"
-          EOF
+            
+            # Stop and clean containers
+            docker compose down
+            docker system prune --all --force
+            docker volume prune --force
+            
+            # Build and start containers
+            docker compose up --build -d
+            
+            # Wait for containers to be ready
+            sleep 30
+            
+            # Run composer install and migrations inside the app container
+            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
+            docker exec peligro-laravel-app php artisan migrate --force
+            
+            # Clear cache
+            docker exec peligro-laravel-app php artisan optimize:clear
+            docker exec peligro-laravel-app php artisan optimize
+          else
+            # Reemplazar valores específicos en .env existente
+            sed -i "s|^DB_HOST=.*|DB_HOST=$DB_HOST|" .env
+            sed -i "s|^DB_PORT=.*|DB_PORT=$DB_PORT|" .env
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DB_DATABASE|" .env
+            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USERNAME|" .env
+            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" .env
+            sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" .env
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+          fi
+          
+          # Ejecutar comandos de Docker
+          docker compose down
+          docker system prune --all -f
+          docker volume prune --all -f
+          
+          # Construir y levantar los contenedores
+          docker compose up --build -d
+          
+          # Ejecutar composer install y migraciones dentro del contenedor
+          docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
+          docker exec peligro-laravel-app php artisan migrate --force
+          
+          # Limpiar cache
+          docker exec peligro-laravel-app php artisan optimize:clear
+          docker exec peligro-laravel-app php artisan optimize
+        EOF
+        
+        # Limpiar clave SSH
+        rm -f private_key.pem
