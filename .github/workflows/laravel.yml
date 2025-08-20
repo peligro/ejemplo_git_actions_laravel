@@ -76,34 +76,33 @@ jobs:
             # Clear cache
             docker exec peligro-laravel-app php artisan optimize:clear
             docker exec peligro-laravel-app php artisan optimize
-          else
-            # Reemplazar valores específicos en .env existente
-            sed -i "s|^DB_HOST=.*|DB_HOST=$DB_HOST|" .env
-            sed -i "s|^DB_PORT=.*|DB_PORT=$DB_PORT|" .env
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DB_DATABASE|" .env
-            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USERNAME|" .env
-            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" .env
-            sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" .env
-            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-          fi
+            else
+              # Reemplazar valores específicos en .env existente
+              sed -i "s|^DB_HOST=.*|DB_HOST=$DB_HOST|" .env
+              sed -i "s|^DB_PORT=.*|DB_PORT=$DB_PORT|" .env
+              sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DB_DATABASE|" .env
+              sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USERNAME|" .env
+              sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" .env
+              sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" .env
+              sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+              sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+            fi
           
-          # Ejecutar comandos de Docker
-          docker compose down
-          docker system prune --all -f
-          docker volume prune --all -f
-          
-          # Construir y levantar los contenedores
-          docker compose up --build -d
-          
-          # Ejecutar composer install y migraciones dentro del contenedor
-          docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
-          docker exec peligro-laravel-app php artisan migrate --force
-          
-          # Limpiar cache
-          docker exec peligro-laravel-app php artisan optimize:clear
-          docker exec peligro-laravel-app php artisan optimize
-        EOF
+            # Ejecutar comandos de Docker
+            docker compose down
+            docker system prune --all -f
+            docker volume prune --all -f
+            
+            # Construir y levantar los contenedores
+            docker compose up --build -d
+            
+            # Ejecutar composer install y migraciones dentro del contenedor
+            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
+            docker exec peligro-laravel-app php artisan migrate --force
+            
+            # Limpiar cache
+            docker exec peligro-laravel-app php artisan optimize:clear
+            docker exec peligro-laravel-app php artisan optimize
+            EOF
         
-        # Limpiar clave SSH
-        rm -f private_key.pem
+        
