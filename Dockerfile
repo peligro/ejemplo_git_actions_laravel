@@ -54,4 +54,34 @@ RUN chmod -R 775 storage bootstrap/cache
 # Cambiar a usuario www-data
 USER www-data
 
+
+
+# Instalar gosu
+RUN set -ex && \
+    fetchDeps='ca-certificates wget' && \
+    apt-get update && apt-get install -y $fetchDeps --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/* && \
+    \
+    dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')" && \
+    wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.16/gosu-$dpkgArch" && \
+    wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/1.16/gosu-$dpkgArch.asc" && \
+    export GNUPGHOME="$(mktemp -d)" && \
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 && \
+    gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu && \
+    gpgconf --kill all && \
+    rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc && \
+    chmod +x /usr/local/bin/gosu && \
+    apt-get purge -y --auto-remove $fetchDeps
+
+# Copiar entrypoint
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Ejecutar como root para que el entrypoint pueda usar chown
+USER root
+
+# Definir entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# CMD (se pasará al entrypoint)
 CMD ["php-fpm"]

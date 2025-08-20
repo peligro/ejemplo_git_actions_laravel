@@ -5,6 +5,7 @@ services:
     build: .
     container_name: peligro-laravel-app
     working_dir: /var/www/html
+    user: root
     volumes:
       - ./storage:/var/www/html/storage
       - ./bootstrap/cache:/var/www/html/bootstrap/cache
