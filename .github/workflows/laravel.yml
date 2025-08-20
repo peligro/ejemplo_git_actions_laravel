@@ -77,7 +77,7 @@ jobs:
 
             # === Construir e iniciar servicios ===
             echo "🚀 Construyendo e iniciando contenedores..."
-            docker-compose up --build -d
+            docker-compose up --build -d 
 
             # === Ejecutar migraciones ===
             echo "🔄 Ejecutando migraciones..."
