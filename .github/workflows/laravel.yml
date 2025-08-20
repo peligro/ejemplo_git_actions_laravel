@@ -34,14 +34,19 @@ jobs:
             cd /home/ubuntu/proyecto
             
             # Pull latest code
+            echo "Pulling latest code from main branch..."
             git fetch origin main
             git reset --hard origin/main
             
-            # Check if .env exists, if not create from example
-            if [ ! -f .env ]; then
-              echo "Creating .env file from .env.example"
-              cp .env.example .env
+            # Backup existing .env if it exists
+            if [ -f .env ]; then
+              echo "Backing up existing .env file..."
+              cp .env .env.backup
             fi
+            
+            # Create fresh .env from example
+            echo "Creating fresh .env from .env.example..."
+            cp .env.example .env
             
             # Function to set or update environment variable
             set_env_var() {
@@ -51,13 +56,16 @@ jobs:
               if grep -q "^$var_name=" .env; then
                 # Variable exists, update it
                 sed -i "s|^$var_name=.*|$var_name=$var_value|" .env
+                echo "Updated $var_name"
               else
                 # Variable doesn't exist, add it
                 echo "$var_name=$var_value" >> .env
+                echo "Added $var_name"
               fi
             }
             
             # Set database configuration
+            echo "Setting database configuration..."
             set_env_var "DB_CONNECTION" "pgsql"
             set_env_var "DB_HOST" "${{ secrets.DB_HOST }}"
             set_env_var "DB_PORT" "${{ secrets.DB_PORT }}"
@@ -66,22 +74,32 @@ jobs:
             set_env_var "DB_PASSWORD" "${{ secrets.DB_PASSWORD }}"
             
             # Set other required variables
+            echo "Setting application configuration..."
             set_env_var "APP_KEY" "${{ secrets.APP_KEY }}"
             set_env_var "APP_DEBUG" "false"
             set_env_var "APP_ENV" "production"
+            set_env_var "APP_URL" "http://${{ secrets.EC2_HOST }}"
             
-            # Remove any commented database lines
-            sed -i '/^# DB_/d' .env
+            # Clean up .env file - remove duplicates, comments and empty lines
+            echo "Cleaning up .env file..."
+            awk '!seen[$0]++' .env > .env.tmp && mv .env.tmp .env
+            sed -i '/^#/d' .env
+            sed -i '/^$/d' .env
             
             # Show the final .env content for debugging
             echo "Final .env content:"
             grep -E "^(DB_|APP_)" .env
+            echo "---"
+            
+            # Set proper permissions
+            echo "Setting file permissions..."
+            chmod -R 755 storage bootstrap/cache
             
             # Stop and clean containers
             echo "Stopping and cleaning Docker containers..."
-            docker compose down
-            docker system prune --all --force
-            docker volume prune --force
+            docker compose down || true
+            docker system prune --all --force || true
+            docker volume prune --force || true
             
             # Build and start containers
             echo "Building and starting containers..."
@@ -89,18 +107,41 @@ jobs:
             
             # Wait for containers to be ready
             echo "Waiting for containers to be ready..."
-            sleep 30
+            sleep 45
             
-            # Run composer install and migrations inside the app container
+            # Set permissions inside container
+            echo "Setting permissions inside container..."
+            docker exec peligro-laravel-app chown -R www-data:www-data storage bootstrap/cache || true
+            docker exec peligro-laravel-app chmod -R 775 storage bootstrap/cache || true
+            
+            # Run composer install inside the app container
             echo "Installing Composer dependencies..."
-            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader --no-interaction
+            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader --no-interaction --no-progress
             
+            # Clear cache first
+            echo "Clearing cache..."
+            docker exec peligro-laravel-app php artisan config:clear || true
+            docker exec peligro-laravel-app php artisan cache:clear || true
+            docker exec peligro-laravel-app php artisan view:clear || true
+            
+            # Run migrations
             echo "Running migrations..."
             docker exec peligro-laravel-app php artisan migrate --force
             
-            # Clear cache
+            # Optimize application
             echo "Optimizing application..."
-            docker exec peligro-laravel-app php artisan optimize:clear
+            docker exec peligro-laravel-app php artisan config:cache
+            docker exec peligro-laravel-app php artisan route:cache
+            docker exec peligro-laravel-app php artisan view:cache
             docker exec peligro-laravel-app php artisan optimize
+            
+            # Restart PHP-FPM to apply changes
+            echo "Restarting PHP-FPM..."
+            docker exec peligro-laravel-app pkill -o -USR2 php-fpm || true
+            
+            # Health check
+            echo "Performing health check..."
+            sleep 10
+            curl -f http://localhost || echo "Health check failed, but continuing..."
             
             echo "Deployment completed successfully!"
