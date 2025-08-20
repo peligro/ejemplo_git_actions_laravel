@@ -43,21 +43,39 @@ jobs:
               cp .env.example .env
             fi
             
-            # Always ensure DB_CONNECTION is pgsql
-            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+            # Function to set or update environment variable
+            set_env_var() {
+              local var_name="$1"
+              local var_value="$2"
+              
+              if grep -q "^$var_name=" .env; then
+                # Variable exists, update it
+                sed -i "s|^$var_name=.*|$var_name=$var_value|" .env
+              else
+                # Variable doesn't exist, add it
+                echo "$var_name=$var_value" >> .env
+              fi
+            }
             
-            # Replace environment variables
-            sed -i "s|^DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
-            sed -i "s|^DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|" .env
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
-            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
-            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|" .env
-            sed -i "s|^APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|" .env
-            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+            # Set database configuration
+            set_env_var "DB_CONNECTION" "pgsql"
+            set_env_var "DB_HOST" "${{ secrets.DB_HOST }}"
+            set_env_var "DB_PORT" "${{ secrets.DB_PORT }}"
+            set_env_var "DB_DATABASE" "${{ secrets.DB_DATABASE }}"
+            set_env_var "DB_USERNAME" "${{ secrets.DB_USERNAME }}"
+            set_env_var "DB_PASSWORD" "${{ secrets.DB_PASSWORD }}"
+            
+            # Set other required variables
+            set_env_var "APP_KEY" "${{ secrets.APP_KEY }}"
+            set_env_var "APP_DEBUG" "false"
+            set_env_var "APP_ENV" "production"
             
             # Remove any commented database lines
             sed -i '/^# DB_/d' .env
+            
+            # Show the final .env content for debugging
+            echo "Final .env content:"
+            grep -E "^(DB_|APP_)" .env
             
             # Stop and clean containers
             echo "Stopping and cleaning Docker containers..."
