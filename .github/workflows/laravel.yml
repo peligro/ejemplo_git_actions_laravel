@@ -1,46 +1,116 @@
-name: Deploy Laravel to EC2
+name: Deploy to EC2
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    steps:
-      # 1. Conectarse al EC2 mediante SSH
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/proyecto
-            git pull origin main
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: ${{ secrets.DB_HOST }}
+      DB_PORT: ${{ secrets.DB_PORT }}
+      DB_DATABASE: ${{ secrets.DB_DATABASE }}
+      DB_USERNAME: ${{ secrets.DB_USERNAME }}
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      APP_KEY: ${{ secrets.APP_KEY }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
 
-            # Copiar .env si no existe
-            if [ ! -f .env ]; then
-              cp .env.example .env
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2 via SSH
+        run: |
+          # Conectarse al servidor EC2 usando SSH
+          ssh -i <(echo "$EC2_SSH_KEY") $EC2_USER@$EC2_HOST << 'EOF'
+            cd /home/ubuntu/proyecto
+            # Descargar el código más reciente
+            git fetch origin
+            git reset --hard origin/main
+
+            # Verificar si existe .env, si no, crearlo
+            if [ ! -f ".env" ]; then
+              cat > .env << 'EOT'
+          APP_NAME=Laravel
+          APP_ENV=production
+          APP_DEBUG=false
+          APP_URL=http://localhost
+          APP_LOCALE=en
+          APP_FALLBACK_LOCALE=en
+          APP_FAKER_LOCALE=en_US
+          APP_MAINTENANCE_DRIVER=file
+          PHP_CLI_SERVER_WORKERS=4
+          BCRYPT_ROUNDS=12
+          LOG_CHANNEL=stack
+          LOG_STACK=single
+          LOG_DEPRECATIONS_CHANNEL=null
+          LOG_LEVEL=debug
+          DB_CONNECTION=pgsql
+          DB_HOST=laravel-postgres
+          DB_PORT=5432
+          DB_DATABASE=laravel
+          DB_USERNAME=laravel
+          DB_PASSWORD=secret
+          SESSION_DRIVER=database
+          SESSION_LIFETIME=120
+          SESSION_ENCRYPT=false
+          SESSION_PATH=/
+          SESSION_DOMAIN=null
+          BROADCAST_CONNECTION=log
+          FILESYSTEM_DISK=local
+          QUEUE_CONNECTION=database
+          CACHE_STORE=database
+          MEMCACHED_HOST=127.0.0.1
+          REDIS_CLIENT=phpredis
+          REDIS_HOST=127.0.0.1
+          REDIS_PASSWORD=null
+          REDIS_PORT=6379
+          MAIL_MAILER=log
+          MAIL_SCHEME=null
+          MAIL_HOST=127.0.0.1
+          MAIL_PORT=2525
+          MAIL_USERNAME=null
+          MAIL_PASSWORD=null
+          MAIL_FROM_ADDRESS="hello@example.com"
+          MAIL_FROM_NAME="${APP_NAME}"
+          AWS_ACCESS_KEY_ID=
+          AWS_SECRET_ACCESS_KEY=
+          AWS_DEFAULT_REGION=us-east-1
+          AWS_BUCKET=
+          AWS_USE_PATH_STYLE_ENDPOINT=false
+          VITE_APP_NAME="${APP_NAME}"
+          EOT
             fi
 
-            # Reemplazar variables
-            sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
-            sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|" .env
-            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
-            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
-            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|" .env
-            sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|" .env
-            sed -i "s|APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|APP_DEBUG=.*|APP_DEBUG=false|" .env
+            # Reemplazar valores clave en .env
+            sed -i "s|DB_HOST=.*|DB_HOST=${DB_HOST}|g" .env
+            sed -i "s|DB_PORT=.*|DB_PORT=${DB_PORT}|g" .env
+            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|g" .env
+            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|g" .env
+            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|g" .env
+            sed -i "s|APP_KEY=.*|APP_KEY=${APP_KEY}|g" .env
 
-            # 🔥 CORREGIR PERMISOS EN EL HOST ANTES DE LEVANTAR DOCKER
-            sudo chown -R ubuntu:www-data storage bootstrap/cache
-            sudo chmod -R 775 storage bootstrap/cache
+            # Detener y limpiar contenedores
+            docker-compose down
+            docker system prune --all --force
+            docker volume prune --all --force
 
-            # Levantar contenedores
-            docker-compose down --remove-orphans
-            docker-compose up -d --build
+            # Construir e iniciar servicios
+            docker-compose up --build -d
+
+            # Verificar si se necesita composer install
+            if [ ! -d "vendor" ]; then
+              docker-compose exec app composer install --no-dev --optimize-autoloader
+            fi
 
             # Ejecutar migraciones
-            docker exec peligro-laravel-app php artisan migrate --force
+            docker-compose exec app php artisan migrate --force
+
+            echo "✅ Despliegue completado"
+          EOF
