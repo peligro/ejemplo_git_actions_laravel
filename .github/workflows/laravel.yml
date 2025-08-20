@@ -39,70 +39,50 @@ jobs:
             
             # Check if .env exists, if not create from example
             if [ ! -f .env ]; then
+              echo "Creating .env file from .env.example"
               cp .env.example .env
-              
-              # Replace environment variables
-              sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|g" .env
-              sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|g" .env
-              sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|g" .env
-              sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
-              sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
-              sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|g" .env
-            else
-              # Update existing .env if needed
-              sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|g" .env
-              sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|g" .env
-              sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|g" .env
-              sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|g" .env
-              sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|g" .env
-              sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|g" .env
             fi
             
+            # Always ensure DB_CONNECTION is pgsql
+            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+            
+            # Replace environment variables
+            sed -i "s|^DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
+            sed -i "s|^DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|" .env
+            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
+            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
+            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|" .env
+            sed -i "s|^APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|" .env
+            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+            
+            # Remove any commented database lines
+            sed -i '/^# DB_/d' .env
+            
             # Stop and clean containers
+            echo "Stopping and cleaning Docker containers..."
             docker compose down
             docker system prune --all --force
             docker volume prune --force
             
             # Build and start containers
+            echo "Building and starting containers..."
             docker compose up --build -d
             
             # Wait for containers to be ready
+            echo "Waiting for containers to be ready..."
             sleep 30
             
             # Run composer install and migrations inside the app container
-            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
+            echo "Installing Composer dependencies..."
+            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader --no-interaction
+            
+            echo "Running migrations..."
             docker exec peligro-laravel-app php artisan migrate --force
             
             # Clear cache
+            echo "Optimizing application..."
             docker exec peligro-laravel-app php artisan optimize:clear
             docker exec peligro-laravel-app php artisan optimize
-            else
-              # Reemplazar valores específicos en .env existente
-              sed -i "s|^DB_HOST=.*|DB_HOST=$DB_HOST|" .env
-              sed -i "s|^DB_PORT=.*|DB_PORT=$DB_PORT|" .env
-              sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$DB_DATABASE|" .env
-              sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USERNAME|" .env
-              sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASSWORD|" .env
-              sed -i "s|^APP_KEY=.*|APP_KEY=$APP_KEY|" .env
-              sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-              sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-            fi
-          
-            # Ejecutar comandos de Docker
-            docker compose down
-            docker system prune --all -f
-            docker volume prune --all -f
             
-            # Construir y levantar los contenedores
-            docker compose up --build -d
-            
-            # Ejecutar composer install y migraciones dentro del contenedor
-            docker exec peligro-laravel-app composer install --no-dev --optimize-autoloader
-            docker exec peligro-laravel-app php artisan migrate --force
-            
-            # Limpiar cache
-            docker exec peligro-laravel-app php artisan optimize:clear
-            docker exec peligro-laravel-app php artisan optimize
-            EOF
-        
-        
+            echo "Deployment completed successfully!"
