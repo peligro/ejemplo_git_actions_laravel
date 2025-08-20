@@ -58,6 +58,15 @@ jobs:
             sed -i "s|^#*DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
             sed -i "s|^#*APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
 
+            # === 4.5 Verificar que .env se haya creado correctamente ===
+            if [ ! -f ".env" ]; then
+              echo "❌ FATAL: El archivo .env no existe después de crearlo"
+              exit 1
+            fi
+            echo "✅ .env creado exitosamente en: $(pwd)/.env"
+            echo "📄 Variables clave en .env:"
+            grep -E "APP_ENV|APP_KEY|DB_HOST|DB_DATABASE" .env
+
             # === 5. Limpiar ===
             docker-compose down --remove-orphans || true
             docker system prune -a --force --volumes
