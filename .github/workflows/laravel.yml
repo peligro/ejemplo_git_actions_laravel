@@ -2,138 +2,47 @@ name: Deploy Laravel to EC2
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: 🛑 Checkout del código
-        uses: actions/checkout@v4
+      # 1. Conectarse al EC2 mediante SSH
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
         with:
-          fetch-depth: 0
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/proyecto
+            git pull origin main
 
-      - name: 🔐 Configurar SSH Key
-        uses: webfactory/ssh-agent@v0.5.1
-        with:
-          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
-
-      - name: 🌐 Conectarse al servidor EC2 y desplegar
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_DATABASE: ${{ secrets.DB_DATABASE }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          APP_KEY: ${{ secrets.APP_KEY }}
-        run: |
-          # Variables
-          REMOTE_USER="${EC2_USER}"
-          REMOTE_HOST="${EC2_HOST}"
-          LARAVEL_DIR="/home/ubuntu/proyecto"
-          DOCKER_DIR="/home/ubuntu/proyecto"
-
-          # Generar SHORT_COMMIT
-          SHORT_COMMIT=$(git rev-parse --short=7 HEAD)
-
-          echo "🔗 Conectando a $REMOTE_USER@$REMOTE_HOST..."
-
-          ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << EOF
-            set -e
-
-            # Paso 1: Ir al directorio de Laravel
-            cd "$LARAVEL_DIR" || { echo "❌ Error: No se encontró el directorio $LARAVEL_DIR"; exit 1; }
-
-            # Paso 2: Eliminar lock y actualizar código
-            echo "🔓 Eliminando .git/index.lock si existe..."
-            rm -f .git/index.lock
-
-            echo "⬇️  Actualizando código desde GitHub..."
-            git fetch origin
-            git reset --hard origin/main
-            git clean -fd
-
-            # Generar SHORT_COMMIT y nombres únicos
-            SHORT_COMMIT=\$(git rev-parse --short=7 HEAD)
-            export APP_CONTAINER_NAME="peligro-laravel-app-\$SHORT_COMMIT"
-            export NGINX_CONTAINER_NAME="laravel-nginx-\$SHORT_COMMIT"
-
-            # Paso 3: Manejo del .env
+            # Verificar si .env existe, si no lo crea con variables
             if [ ! -f .env ]; then
               cp .env.example .env
             fi
 
-            # Paso 4: Asegurar que las variables estén descomentadas y con valores correctos
-            sed -i "s|^#\\s*DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
-            sed -i "s|^#\\s*DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|^#\\s*DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|^#\\s*DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|^#\\s*DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^#\\s*DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            # Reemplazar variables en .env usando sed
+            sed -i "s|DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
+            sed -i "s|DB_PORT=.*|DB_PORT=${{ secrets.DB_PORT }}|" .env
+            sed -i "s|DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
+            sed -i "s|DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
+            sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=${{ secrets.DB_PASSWORD }}|" .env
+            sed -i "s|APP_KEY=.*|APP_KEY=${{ secrets.APP_KEY }}|" .env
 
-            sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
-            sed -i "s|^DB_HOST=.*|DB_HOST=${DB_HOST}|" .env
-            sed -i "s|^DB_PORT=.*|DB_PORT=${DB_PORT}|" .env
-            sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_DATABASE}|" .env
-            sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${DB_USERNAME}|" .env
-            sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASSWORD}|" .env
+            # Actualizar APP_ENV y APP_DEBUG
+            sed -i "s|APP_ENV=.*|APP_ENV=production|" .env
+            sed -i "s|APP_DEBUG=.*|APP_DEBUG=false|" .env
 
-            sed -i "s|^#\\s*APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-            sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" .env
-            sed -i "s|^#\\s*APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-            sed -i "s|^#\\s*APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-            sed -i "s|^#\\s*APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
-            sed -i "s|^APP_URL=.*|APP_URL=http://tu-dominio.com|" .env
+            # Asegurar permisos
+            chmod -R 775 storage bootstrap/cache
 
-            # Paso 5: Permisos (en el host)
-            mkdir -p storage/logs storage/framework/{cache,sessions,views} bootstrap/cache
+            # Construir e iniciar servicios con docker-compose
+            docker-compose down --remove-orphans
+            docker-compose up -d --build
 
-            echo "🔧 Ajustando permisos para storage y bootstrap/cache..."
-            sudo chown -R www-data:www-data storage bootstrap/cache
-            sudo chmod -R 775 storage bootstrap/cache
-
-            # Asegurar que bootstrap/ también sea accesible
-            sudo chown -R www-data:www-data bootstrap
-
-            # Paso 6: Ir al directorio de Docker
-            cd "$DOCKER_DIR" || { echo "❌ Error: No se encontró el directorio $DOCKER_DIR"; exit 1; }
-
-            # Paso 7: Eliminar contenedor anterior (por nombre único)
-            echo "🧹 Eliminando contenedor antiguo (si existe)..."
-            docker rm -f "\$APP_CONTAINER_NAME" || true
-            docker system prune -a --force --volumes || true
-
-            # Paso 8: Levantar contenedores con variables
-            echo "🚀 Construyendo y levantando contenedores..."
-            APP_CONTAINER_NAME="\$APP_CONTAINER_NAME" \
-            NGINX_CONTAINER_NAME="\$NGINX_CONTAINER_NAME" \
-            APP_KEY="${APP_KEY}" \
-            DB_HOST="${DB_HOST}" \
-            DB_PORT="${DB_PORT}" \
-            DB_DATABASE="${DB_DATABASE}" \
-            DB_USERNAME="${DB_USERNAME}" \
-            DB_PASSWORD="${DB_PASSWORD}" \
-            docker compose up --build -d
-
-            # Paso 9: Migraciones
-            echo "🔄 Ejecutando migraciones..."
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan migrate --force
-
-            # Paso 10: Optimización
-            echo "🧹 Limpiando caché y optimizando..."
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize:clear
-            docker exec -u www-data "\$APP_CONTAINER_NAME" php artisan optimize
-
-            echo "✅ Despliegue completado con éxito"
-          EOF
-
-      - name: 📢 Notificación de éxito
-        run: echo "🚀 Despliegue completado correctamente"
+            # Ejecutar migraciones solo si no se han hecho (o forzarlas)
+            # Accedemos al contendor app para ejecutar artisan
+            docker exec peligro-laravel-app php artisan migrate --force

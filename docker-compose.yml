@@ -1,7 +1,9 @@
+version: '3.8'
+
 services:
   app:
     build: .
-    container_name: ${APP_CONTAINER_NAME:-peligro-laravel-app}  # ← Usa variable
+    container_name: peligro-laravel-app
     working_dir: /var/www/html
     volumes:
       - ./storage:/var/www/html/storage
@@ -21,7 +23,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: ${NGINX_CONTAINER_NAME:-laravel-nginx}
+    container_name: laravel-nginx
     ports:
       - "80:80"
     volumes:
