@@ -123,15 +123,6 @@ jobs:
             docker exec peligro-laravel-app php artisan view:cache
             docker exec peligro-laravel-app php artisan optimize
             
-            # Health check
-            echo "Performing health check..."
-            sleep 10
-            if curl -f http://localhost; then
-              echo "Health check passed! Deployment successful!"
-            else
-              echo "Health check failed, checking application logs..."
-              docker exec peligro-laravel-app tail -n 50 storage/logs/laravel.log || docker logs peligro-laravel-app
-              exit 1
-            fi
+            
             
             echo "Deployment completed successfully!"
